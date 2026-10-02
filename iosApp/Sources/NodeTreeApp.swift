@@ -11,30 +11,65 @@ struct NodeTreeApp: App {
     }
 }
 
-/// Skeleton screen: type a request (on-device speech arrives in slice 1),
-/// hear the reply, and read the run tree as an accessible outline.
-/// Uses the demo conductor (fake contacts, fake dialer) until slice 1.
-struct ContentView: View {
-    private let bridge = CallbackConductorKt.createDemoCallbackConductor(platform: .ios, driverId: "ios-voice")
+/// Holds the conductor for the app's lifetime. It must not live in the View
+/// struct: SwiftUI recreates views freely, which would drop a pending yes/no.
+@MainActor
+final class AppModel: ObservableObject {
+    @Published var reply: ReplyView?
+
+    private let bridge = CallbackConductorKt.createPhoneCallbackConductor(
+        platform: .ios, contacts: IOSContacts(), dialer: IOSDialer(), driverId: "ios-voice"
+    )
     private let speaker = AVSpeechSynthesizer()
 
+    func send(_ text: String) {
+        bridge.send(text: text) { view in
+            self.reply = view
+            self.speaker.speak(AVSpeechUtterance(string: view.text))
+        }
+    }
+}
+
+/// Talk (on-device speech) or type, hear the reply, and read the run tree as
+/// an accessible outline. Real contacts and dialer; calendar is still demo data.
+struct ContentView: View {
+    @StateObject private var model = AppModel()
+    @StateObject private var speech = SpeechInput()
     @State private var typed = ""
-    @State private var reply: ReplyView?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                TextField("Say or type a request", text: $typed)
-                    .textFieldStyle(.roundedBorder)
-                Button("Send") { send(typed); typed = "" }
+            Button {
+                speech.toggle { model.send($0) }
+            } label: {
+                Text(speech.isListening ? "Done" : "Talk")
+                    .font(.largeTitle.bold())
+                    .frame(maxWidth: .infinity, minHeight: 96)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityHint(speech.isListening ? "Stops listening and sends what you said" : "Starts listening")
+
+            if speech.isListening, !speech.partial.isEmpty {
+                Text(speech.partial).font(.title3).foregroundStyle(.secondary)
+            }
+            if let problem = speech.problem {
+                Text(problem).font(.callout).foregroundStyle(.red)
             }
 
-            if let reply {
+            HStack {
+                TextField("Or type a request", text: $typed)
+                    .textFieldStyle(.roundedBorder)
+                Button("Send") { model.send(typed); typed = "" }
+            }
+
+            if let reply = model.reply {
                 Text(reply.text).font(.title2)
                 if reply.isConfirmation {
                     HStack(spacing: 12) {
-                        Button("Yes") { send("yes") }.buttonStyle(.borderedProminent).font(.title)
-                        Button("No") { send("no") }.buttonStyle(.bordered).font(.title)
+                        Button("Yes") { model.send("yes") }
+                            .buttonStyle(.borderedProminent).font(.title)
+                        Button("No") { model.send("no") }
+                            .buttonStyle(.bordered).font(.title)
                     }
                 }
                 List {
@@ -47,12 +82,5 @@ struct ContentView: View {
             Spacer()
         }
         .padding()
-    }
-
-    private func send(_ text: String) {
-        bridge.send(text: text) { view in
-            reply = view
-            speaker.speak(AVSpeechUtterance(string: view.text))
-        }
     }
 }

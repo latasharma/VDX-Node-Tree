@@ -3,6 +3,9 @@ package app.nodetree.driver
 import app.nodetree.demo.demoConductor
 import app.nodetree.model.Platform
 import app.nodetree.narrate.Outline
+import app.nodetree.phone.ContactsSource
+import app.nodetree.phone.Dialer
+import app.nodetree.phone.phoneConductor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
@@ -45,6 +48,14 @@ class CallbackConductor(
     }
 }
 
-/** Demo wiring for the native apps until their real executors land (slice 1). */
+/** Native app wiring: real contacts and dialer supplied by the platform. */
+fun createPhoneCallbackConductor(
+    platform: Platform,
+    contacts: ContactsSource,
+    dialer: Dialer,
+    driverId: String,
+): CallbackConductor = CallbackConductor(phoneConductor(platform, contacts, dialer), MainScope(), driverId, sessionId = driverId)
+
+/** Demo wiring (fake contacts and dialer), for previews and simulators without contacts. */
 fun createDemoCallbackConductor(platform: Platform, driverId: String): CallbackConductor =
     CallbackConductor(demoConductor(platform), MainScope(), driverId, sessionId = driverId)

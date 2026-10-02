@@ -9,13 +9,18 @@ and plug in Alexa when we get access.
 
 | Path | What | Status |
 | --- | --- | --- |
-| `shared/` | Kotlin Multiplatform core: tree model, catalog, recipe-first planner, step runner with confirmation gate, narration and outline, driver contract, Console and Simulated Alexa drivers | Builds; 45 tests pass on JVM |
+| `shared/` | Kotlin Multiplatform core: tree model, catalog, recipe-first planner, step runner with confirmation gate, narration and outline, driver contract, Console and Simulated Alexa drivers, contact matching and phone executor | Builds; 57 tests pass on JVM |
 | `cli/` | Developer console for talking to the tree with either driver | Builds and runs |
-| `androidApp/` | Compose shell: talk/type, yes/no, spoken reply, accessible outline | **Not built yet** (needs the Android SDK) |
-| `iosApp/` | SwiftUI shell, XcodeGen project | **Not built yet** (needs a Mac with Xcode) |
+| `androidApp/` | Compose app: talk (system recognizer, offline preferred) or type, yes/no, spoken reply, accessible outline; real contacts (ContactsContract) and dialer (`ACTION_DIAL`) | **Not built yet** (needs the Android SDK) |
+| `iosApp/` | SwiftUI app: tap-to-talk on-device speech (SFSpeechRecognizer) or type; real contacts (CNContactStore) and dialer (`tel:`, iOS asks first); XcodeGen project | **Not built yet** (needs a Mac with Xcode) |
 
-Everything runs on fake contacts, a fake dialer and a demo calendar. Every
-reply and outline line says so.
+The apps use the phone's real contacts and dialer. The calendar is still demo
+data until slice 2, and every reply that used it says so. The console uses
+fake contacts and a fake dialer, also labelled.
+
+Slice 1 is not done until the checks in
+[`docs/SLICE-1-DEVICE-TEST.md`](docs/SLICE-1-DEVICE-TEST.md) pass on real
+Android and iOS phones.
 
 ## Run it
 
@@ -59,5 +64,10 @@ plans or calls apps; `Conductor` does.
 ## Design
 
 See the design doc for principles, the tree model and the build plan. Slice 0
-(this skeleton) is done; slice 1 adds the real contacts/dialer executors and
-on-device voice on both platforms.
+(the skeleton) is done. Slice 1 (real contacts and dialer, on-device voice) is
+written and unit-tested in shared code; it needs the device checks above.
+
+Contact matching is deliberately strict (`ContactMatcher`): exact full name,
+then exact first name, then a name starting with the words said. Two matches
+at the same level means asking for the full name; a name that only *contains*
+the words is never dialed.

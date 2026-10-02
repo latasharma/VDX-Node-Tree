@@ -17,6 +17,10 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Node Tree
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        SWIFT_VERSION: "5.0"
+        INFOPLIST_KEY_NSContactsUsageDescription: Node Tree looks up the person you ask to call.
+        INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: Node Tree turns what you say into a request, on your device when possible.
+        INFOPLIST_KEY_NSMicrophoneUsageDescription: Node Tree listens only after you tap Talk, until you tap Done.
         FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
         OTHER_LDFLAGS: ["-framework", "NodeTreeShared"]
     preBuildScripts:

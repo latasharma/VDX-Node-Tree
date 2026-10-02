@@ -1,16 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- Slice 1 adds READ_CONTACTS and RECORD_AUDIO when the real executors and
-         on-device voice driver land. No accessibility service, no CALL_PHONE:
-         dialing uses ACTION_DIAL, so the user always taps Call. -->
-
+    <!-- Contacts are read only to find who to call, asked for the first time a
+         request needs them. No CALL_PHONE and no accessibility service: dialing
+         uses ACTION_DIAL, so the user always taps Call. Speech goes through the
+         system recognizer (RecognizerIntent), so the app needs no RECORD_AUDIO. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
     <queries>
         <intent>
             <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
         </intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
         </intent>
     </queries>
 

@@ -1,6 +1,8 @@
 package app.nodetree.android
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
@@ -34,28 +36,42 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import app.nodetree.demo.demoConductor
+import androidx.core.content.ContextCompat
 import app.nodetree.driver.Conductor
 import app.nodetree.driver.DriverReply
 import app.nodetree.driver.DriverRequest
 import app.nodetree.model.Platform
 import app.nodetree.narrate.Outline
+import app.nodetree.phone.phoneConductor
+import app.nodetree.plan.ParseResult
+import app.nodetree.plan.RuleBasedIntentParser
 import kotlinx.coroutines.launch
 
 /**
- * Skeleton screen: talk (system speech recognizer) or type, hear the reply,
- * and read the run tree as an accessible outline. Uses the demo conductor
- * (fake contacts, fake dialer) until slice 1 adds the real executors.
+ * Talk (system speech recognizer, offline preferred) or type, hear the reply,
+ * and read the run tree as an accessible outline. Real contacts and dialer;
+ * the calendar is still demo data until slice 2.
  */
 class MainActivity : ComponentActivity() {
-    private val conductor: Conductor = demoConductor(Platform.ANDROID)
+    private val conductor: Conductor by lazy {
+        phoneConductor(Platform.ANDROID, AndroidContacts(this), AndroidDialer(this))
+    }
     private var tts: TextToSpeech? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         tts = TextToSpeech(this) {}
-        setContent { MaterialTheme { NodeTreeScreen(conductor) { tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "reply") } } }
+        setContent {
+            MaterialTheme {
+                NodeTreeScreen(conductor, hasContactsPermission = ::hasContactsPermission) {
+                    tts?.speak(it, TextToSpeech.QUEUE_FLUSH, null, "reply")
+                }
+            }
+        }
     }
+
+    private fun hasContactsPermission() =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
 
     override fun onDestroy() {
         tts?.shutdown()
@@ -64,17 +80,40 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun NodeTreeScreen(conductor: Conductor, speak: (String) -> Unit) {
+private fun NodeTreeScreen(conductor: Conductor, hasContactsPermission: () -> Boolean, speak: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     val tree by conductor.latestTree.collectAsState()
     var reply by remember { mutableStateOf<DriverReply?>(null) }
     var typed by remember { mutableStateOf("") }
 
-    fun send(text: String) {
+    fun deliver(text: String) {
         scope.launch {
             val r = conductor.handle(DriverRequest(text, driverId = "android-voice", sessionId = "android"))
             reply = r
             speak(r.text)
+        }
+    }
+
+    // Contacts permission is asked the first time a request needs it, not at launch.
+    // If the user says no, the request still runs and the reply explains what's missing.
+    val parser = remember { RuleBasedIntentParser() }
+    var waitingForPermission by remember { mutableStateOf<String?>(null) }
+    val askContacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        waitingForPermission?.let(::deliver)
+        waitingForPermission = null
+    }
+
+    fun send(text: String) {
+        val needsContacts = when (val parsed = parser.parse(text)) {
+            is ParseResult.Parsed -> parsed.intent.family == RuleBasedIntentParser.CALL_PERSON
+            is ParseResult.NeedsSlot -> parsed.family == RuleBasedIntentParser.CALL_PERSON
+            ParseResult.Unknown -> false
+        }
+        if (needsContacts && !hasContactsPermission()) {
+            waitingForPermission = text
+            askContacts.launch(Manifest.permission.READ_CONTACTS)
+        } else {
+            deliver(text)
         }
     }
 
